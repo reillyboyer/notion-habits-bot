@@ -18,6 +18,7 @@ right after the main habit run (so it sees fresh Missed Last Instance flags).
 
 import os
 import sys
+import hashlib
 import datetime
 import requests
 from pathlib import Path
@@ -28,6 +29,14 @@ LOCAL_TZ = ZoneInfo("America/New_York")
 
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+
+def habit_handle(page_id):
+    """Stable 6-char identifier for a Notion page ID. See type1_habit_log_scheduler.py."""
+    if not page_id:
+        return "h:??????"
+    h = hashlib.sha1(page_id.encode("utf-8")).hexdigest()[:6]
+    return f"h:{h}"
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 HABITS_DB_ID = os.environ.get("HABITS_DB_ID")
@@ -194,7 +203,6 @@ def is_behind_on_weekly_target(habit):
 # === Main ===================================================================
 
 def evaluate_habit(habit):
-    title = get_title(habit)
     today_not_done = is_today_not_yet_done(habit)
     missed_last = get_checkbox(habit, "Missed Last Instance (Auto)")
     behind = is_behind_on_weekly_target(habit)
@@ -210,7 +218,8 @@ def evaluate_habit(habit):
     if missed_last: flags.append("missed-last")
     if behind: flags.append("behind-weekly")
     flags_str = ", ".join(flags) if flags else "no triggers"
-    print(f"  {title:<40} {flags_str}")
+    # Log with a stable handle, not the title — public Actions logs.
+    print(f"  {habit_handle(habit['id']):<10} {flags_str}")
 
 
 def main():

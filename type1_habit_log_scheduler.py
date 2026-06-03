@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import datetime
+import hashlib
 import requests
 from dotenv import load_dotenv
 from pathlib import Path
@@ -11,6 +12,24 @@ LOCAL_TZ = ZoneInfo("America/New_York")
 
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+
+def habit_handle(page_id):
+    """Stable 6-char identifier derived from a Notion page ID.
+
+    Used in log output instead of habit names so that GitHub Actions logs
+    (which are publicly visible on public repos) don't leak personal habit
+    names like 'No Nicotine'. Same habit always gets the same handle, so you
+    can mentally map 'h:8d4f2a → Logging Habits' once when debugging.
+
+    The hash is deterministic, not cryptographic — page IDs are already
+    semi-public (visible in Notion URLs), so this is privacy-via-indirection
+    rather than secrecy.
+    """
+    if not page_id:
+        return "h:??????"
+    h = hashlib.sha1(page_id.encode("utf-8")).hexdigest()[:6]
+    return f"h:{h}"
 
 # --- Dry-run / simulated-time globals ----------------------------------------
 # Set by parse_cli_args() before main() runs.
@@ -937,7 +956,6 @@ def run_missed_last_instance_update():
 
     for habit_page in habits:
         habit_id = habit_page["id"]
-        habit_name = get_title_from_property(habit_page["properties"]["Habit"])
         types = set(get_habit_types(habit_page))
 
         # We accumulate flags across all assigned types. The OR semantics let a
@@ -970,14 +988,15 @@ def run_missed_last_instance_update():
             missed_multiple_any = missed_multiple_any or mm
 
         # Per-habit log line so it's clear which habit got which flags.
-        # Visual markers make scanning the output much faster than reading booleans.
+        # Uses a stable handle (h:abc123) instead of the habit name so this
+        # output doesn't leak personal info to public GitHub Actions logs.
         if missed_multiple_any:
             marker = "⚠️  missed multiple"
         elif missed_last_any:
             marker = "🚨 missed last"
         else:
             marker = "✓  on track"
-        print(f"  {marker:<22} {habit_name}")
+        print(f"  {marker:<22} {habit_handle(habit_id)}")
 
         update_page_properties(habit_id, {
             "Missed Last Instance (Auto)": {"checkbox": missed_last_any},

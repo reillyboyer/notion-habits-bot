@@ -36,6 +36,7 @@ Active hours are fixed: 08:00 local through 01:00 next-day local.
 import os
 import re
 import sys
+import hashlib
 import datetime
 import requests
 from pathlib import Path
@@ -46,6 +47,20 @@ LOCAL_TZ = ZoneInfo("America/New_York")
 
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+
+def page_handle(page_id):
+    """Stable 6-char identifier for a Notion page ID.
+
+    Used in log output instead of page titles so that GitHub Actions logs
+    (publicly visible on public repos) don't leak personal content like habit
+    names. Deterministic — same page always gets the same handle for
+    consistent debugging.
+    """
+    if not page_id:
+        return "p:??????"
+    h = hashlib.sha1(page_id.encode("utf-8")).hexdigest()[:6]
+    return f"p:{h}"
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 PUSHOVER_USER_KEY = os.environ.get("PUSHOVER_USER_KEY")
@@ -422,7 +437,9 @@ def build_notification(page, title, active_triggers):
 
 def process_page(page, now):
     title = get_page_title(page)
-    print(f"\n• {title}")
+    # Log using a stable handle so public Actions logs don't leak page titles.
+    # The title is still used internally to compose the Pushover notification.
+    print(f"\n• {page_handle(page['id'])}")
 
     # First: reset state if triggers have resolved.
     maybe_reset_state(page)
