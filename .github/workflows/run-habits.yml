@@ -10,10 +10,14 @@ jobs:
   run-habit-script:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Explicit minimum permissions. The job only needs to read the repo;
+    # it does not write back to git, push artifacts, or call the GitHub API.
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: 'pip'
