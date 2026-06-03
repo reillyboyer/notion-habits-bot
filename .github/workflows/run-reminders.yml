@@ -8,7 +8,12 @@ name: Run reminder dispatcher
 # about a week.
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # Every 5 minutes, but offset to avoid :00 and :30 which are the peak
+    # load times on GitHub's shared runners. Per GitHub's own docs:
+    # "High load times include the start of every hour. If the load is
+    # sufficiently high enough, some queued jobs may be dropped."
+    # We fire at :02, :07, :12, :17, :22, :27, :32, :37, :42, :47, :52, :57.
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
   workflow_dispatch:
 
 jobs:
