@@ -1,0 +1,43 @@
+name: Run reminder dispatcher
+
+# Runs every 5 minutes. The dispatcher itself enforces the 8am-1am active
+# hours window in local time, so off-hour runs are cheap no-ops.
+#
+# NOTE: Public repos get unlimited GitHub Actions minutes. If this repo were
+# private, this schedule would blow past the 2000 min/month free quota in
+# about a week.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-dispatcher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Refresh habit-specific trigger state
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          HABITS_DB_ID: ${{ secrets.HABITS_DB_ID }}
+          HABIT_LOG_DB_ID: ${{ secrets.HABIT_LOG_DB_ID }}
+        run: python habit_reminder_evaluator.py
+
+      - name: Run dispatcher
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
+          PUSHOVER_API_TOKEN: ${{ secrets.PUSHOVER_API_TOKEN }}
+          REMINDER_TARGET_DB_IDS: ${{ secrets.REMINDER_TARGET_DB_IDS }}
+        run: python reminder_dispatcher.py

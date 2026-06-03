@@ -1,0 +1,32 @@
+name: Run habit script
+
+on:
+  schedule:
+    # Daily at 8:00 UTC (= 3 AM EST / 4 AM EDT). Plenty close to "3 AM local".
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-habit-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run habit scheduler
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          HABITS_DB_ID: ${{ secrets.HABITS_DB_ID }}
+          HABIT_LOG_DB_ID: ${{ secrets.HABIT_LOG_DB_ID }}
+          HABIT_CONTROL_DB_ID: ${{ secrets.HABIT_CONTROL_DB_ID }}
+          HABIT_METRICS_DB_ID: ${{ secrets.HABIT_METRICS_DB_ID }}
+        run: python type1_habit_log_scheduler.py
