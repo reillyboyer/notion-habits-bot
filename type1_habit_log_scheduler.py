@@ -10,6 +10,11 @@ from zoneinfo import ZoneInfo
 
 LOCAL_TZ = ZoneInfo("America/New_York")
 
+# The logical "day" runs 3 AM -> 3 AM local time, not midnight -> midnight.
+# A night-owl boundary: anything that happens before 3 AM still counts toward
+# the previous calendar day. E.g. Monday's window is [Mon 3 AM, Tue 3 AM).
+DAY_BOUNDARY_HOUR = 3
+
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
@@ -39,6 +44,30 @@ def now_local():
     if SIMULATED_NOW is not None:
         return SIMULATED_NOW
     return datetime.datetime.now(LOCAL_TZ)
+
+
+def logical_date_of(dt):
+    """Map a tz-aware datetime to the logical day it belongs to under the
+    3 AM-to-3 AM rule.
+
+    Anything before 3 AM local counts toward the previous calendar day. We
+    implement this by shifting back DAY_BOUNDARY_HOUR hours before taking the
+    date, so:
+        Jun 3, 2:03 AM  -> Jun 2   (before 3 AM -> previous day)
+        Jun 3, 3:00 AM  -> Jun 3   (exactly the boundary -> new day starts)
+        Jun 4, 2:59 AM  -> Jun 3   (still inside Jun 3's window)
+    """
+    return (dt.astimezone(LOCAL_TZ) - datetime.timedelta(hours=DAY_BOUNDARY_HOUR)).date()
+
+
+def logical_today():
+    """The current logical day under the 3 AM boundary.
+
+    Equals the wall-clock date whenever it's already past 3 AM local; between
+    midnight and 3 AM it is still 'yesterday'. Use this anywhere we mean
+    "which habit-day are we in right now" rather than the raw calendar date.
+    """
+    return logical_date_of(now_local())
 
 
 def dry_run_log(action, **details):
@@ -125,14 +154,22 @@ def get_local_log_date(page):
     if not raw:
         return None
 
-    if len(raw) == 10:
-        dt = datetime.datetime.fromisoformat(raw).replace(tzinfo=LOCAL_TZ)
-        return dt.date()
+    if "T" not in raw:
+        # Date-only value: Effective Date was set (a retroactive/backfill date,
+        # or the script-stamped Type 1 day / Type 3 week-start). It names its
+        # logical day directly and carries no time component, so the 3 AM rule
+        # does not apply — return the date as written.
+        return datetime.date.fromisoformat(raw)
 
+    # Datetime value: Effective Date was empty, so the Event Date formula fell
+    # back to Log Date (the creation timestamp). This is the path completed
+    # logs from the Notion completion button hit. Apply the 3 AM-to-3 AM rule
+    # so e.g. a 2:03 AM completion counts toward the prior day, matching the
+    # uncompleted log it's meant to cancel.
     dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=LOCAL_TZ)
-    return dt.astimezone(LOCAL_TZ).date()
+    return logical_date_of(dt)
 
 
 def is_log_in_period(page, start_date, end_date):
@@ -939,7 +976,7 @@ def run_missed_last_instance_update():
 
     Type-aware logic — see compute_*_missed_flags helpers above.
     """
-    today = now_local().date()
+    today = logical_today()
     habits = fetch_active_habits_for_streaks()
     print("Missed-last-instance – active habits:", len(habits))
 
