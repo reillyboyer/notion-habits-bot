@@ -1,21 +1,15 @@
 name: Run habit script
 
 on:
-  schedule:
-    # Daily at 8:05 UTC = 3:05 AM EST / 4:05 AM EDT.
-    #
-    # Two deliberate choices here:
-    #
-    # 1. :05 rather than :00. GitHub's own docs warn that the top of every
-    #    hour is a high-load window and that queued jobs may be dropped when
-    #    load is high enough. Runs at :00 were landing 5-7 hours late.
-    #
-    # 2. 8:05 UTC rather than 7:05 UTC. Cron here is always UTC and does not
-    #    follow daylight saving, so a fixed time drifts by an hour twice a
-    #    year. 7:05 UTC would be 3:05 AM in summer but 2:05 AM in winter --
-    #    before the 3 AM day boundary, so the script would generate logs for
-    #    the previous habit day. 8:05 UTC is never earlier than 3:05 AM local.
-    - cron: '5 8 * * *'
+  # No schedule here on purpose. GitHub was running scheduled jobs 5-6 hours
+  # late, so the Cloudflare Worker (notion-reminder-worker) starts this
+  # workflow at exactly 3:05 AM New York time via workflow_dispatch.
+  #
+  # Don't add a schedule back as a "backup": the weekly and monthly metrics
+  # snapshots aren't safe to run twice, so a second run on a Sunday or the
+  # 1st would create duplicate metrics entries.
+  #
+  # You can still run it by hand from the Actions tab ("Run workflow").
   workflow_dispatch:
 
 jobs:
